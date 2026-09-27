@@ -1,33 +1,10 @@
 import os
-from threading import Thread
-from flask import Flask
 import requests
 import telebot
 
-# Mini Web Sunucusu
-app = Flask("")
-
-
-@app.route("/")
-def home():
-  return "Bot aktif ve çalışıyor!"
-
-
-def run_web():
-  app.run(host="0.0.0.0", port=8080)
-
-
-def keep_alive():
-  t = Thread(target=run_web)
-  t.start()
-
-
-# Bilgilerin
+# Bilgilerin (API anahtarın doğrudan içine eklendi)
 BOT_TOKEN = "8944877188:AAEYZxcVx4vFi6GdpNuGQyw9H65QoqSRrHA"
 VT_API_KEY = "Dd879532277e4c9e19490a5c4e348ab1f714d03792b4046e7b017aa9d36d38aa"
-
-# SANA ÖZEL BİLDİRİM İÇİN: Buraya kendi Telegram ID'ni yaz! (Örn: 123456789)
-ADMIN_TELEGRAM_ID = 000000000
 
 # Zorunlu kanallar
 CHANNELS = ["swarovskiyeniden", "swarovskihile"]
@@ -38,9 +15,6 @@ VT_URL = "https://www.virustotal.com/api/v3/urls"
 user_refs = {}
 referred_users = set()
 admin_sessions = set()
-all_started_users = (
-    set()
-)  # Bota daha önce start vermiş kullanıcıları takip etmek için
 
 
 def check_all_channels(user_id):
@@ -57,27 +31,8 @@ def check_all_channels(user_id):
 @bot.message_handler(commands=["start"])
 def send_welcome(message):
   user_id = message.from_user.id
-  user_name = message.from_user.first_name
   args = message.text.split()
 
-  # Eğer kullanıcı ilk defa bota start veriyorsa sana bildirim gönderelim
-  if user_id not in all_started_users:
-    all_started_users.add(user_id)
-    if ADMIN_TELEGRAM_ID != 8944877188:
-      try:
-        notif_text = (
-            f"🚀 **Yeni Kullanıcı Bota Katıldı!**\n\n"
-            f"👤 Adı: {user_name}\n"
-            f"🆔 ID: `{user_id}`\n"
-            f"🔗 Kullanıcı Adı: @{message.from_user.username if message.from_user.username else 'Yok'}"
-        )
-        bot.send_message(
-            ADMIN_TELEGRAM_ID, notif_text, parse_mode="Markdown"
-        )
-      except Exception:
-        pass
-
-  # 1. Referans Sistemi
   if len(args) > 1:
     ref_id = args[1]
     if ref_id.isdigit():
@@ -101,7 +56,6 @@ def send_welcome(message):
     )
     return
 
-  # 2. Kanal Zorunluluğu Kontrolü
   if not check_all_channels(user_id):
     markup = telebot.types.InlineKeyboardMarkup()
     markup.add(
@@ -236,7 +190,6 @@ def check_url(message):
 
 
 if __name__ == "__main__":
-  keep_alive()
-  print("Bot ve web sunucusu çalışıyor...")
+  print("Bot başlatılıyor...")
   bot.infinity_polling()
   
