@@ -1,10 +1,33 @@
 import os
+from threading import Thread
+from flask import Flask
 import requests
 import telebot
+
+# Mini Web Sunucusu
+app = Flask("")
+
+
+@app.route("/")
+def home():
+  return "Bot aktif ve çalışıyor!"
+
+
+def run_web():
+  app.run(host="0.0.0.0", port=8080)
+
+
+def keep_alive():
+  t = Thread(target=run_web)
+  t.start()
+
 
 # Bilgilerin
 BOT_TOKEN = "8944877188:AAEYZxcVx4vFi6GdpNuGQyw9H65QoqSRrHA"
 VT_API_KEY = "Dd879532277e4c9e19490a5c4e348ab1f714d03792b4046e7b017aa9d36d38aa"
+
+# SANA ÖZEL BİLDİRİM İÇİN: Buraya kendi Telegram ID'ni yaz! (Örn: 123456789)
+ADMIN_TELEGRAM_ID = 000000000
 
 # Zorunlu kanallar
 CHANNELS = ["swarovskiyeniden", "swarovskihile"]
@@ -12,13 +35,14 @@ CHANNELS = ["swarovskiyeniden", "swarovskihile"]
 bot = telebot.TeleBot(BOT_TOKEN)
 VT_URL = "https://www.virustotal.com/api/v3/urls"
 
-# Veri tabanı simülasyonu (Bellekte tutulur)
-user_refs = {}  # {user_id: davet_sayisi}
-referred_users = set()  # Zaten birinin referansıyla gelenler
-admin_sessions = set()  # Admin şifresini girip yetki alanlar
+user_refs = {}
+referred_users = set()
+admin_sessions = set()
+all_started_users = (
+    set()
+)  # Bota daha önce start vermiş kullanıcıları takip etmek için
 
 
-# Kanal kontrol fonksiyonu
 def check_all_channels(user_id):
   for channel in CHANNELS:
     try:
@@ -33,14 +57,31 @@ def check_all_channels(user_id):
 @bot.message_handler(commands=["start"])
 def send_welcome(message):
   user_id = message.from_user.id
+  user_name = message.from_user.first_name
   args = message.text.split()
 
-  # 1. Referans Sistemi (Gerçekten start verenler sayılır)
+  # Eğer kullanıcı ilk defa bota start veriyorsa sana bildirim gönderelim
+  if user_id not in all_started_users:
+    all_started_users.add(user_id)
+    if ADMIN_TELEGRAM_ID != 8944877188:
+      try:
+        notif_text = (
+            f"🚀 **Yeni Kullanıcı Bota Katıldı!**\n\n"
+            f"👤 Adı: {user_name}\n"
+            f"🆔 ID: `{user_id}`\n"
+            f"🔗 Kullanıcı Adı: @{message.from_user.username if message.from_user.username else 'Yok'}"
+        )
+        bot.send_message(
+            ADMIN_TELEGRAM_ID, notif_text, parse_mode="Markdown"
+        )
+      except Exception:
+        pass
+
+  # 1. Referans Sistemi
   if len(args) > 1:
     ref_id = args[1]
     if ref_id.isdigit():
       ref_id = int(ref_id)
-      # Kişi kendisini davet edemez ve daha önce başka bir ref ile gelmemiş olmalı
       if ref_id != user_id and user_id not in referred_users:
         referred_users.add(user_id)
         user_refs[ref_id] = user_refs.get(ref_id, 0) + 1
@@ -53,7 +94,6 @@ def send_welcome(message):
         except Exception:
           pass
 
-  # Eğer kullanıcı admin giriş yapmışsa direkt ana menüye al
   if user_id in admin_sessions:
     bot.reply_to(
         message,
@@ -87,7 +127,6 @@ def send_welcome(message):
     )
     return
 
-  # Normal Kullanıcı Menüsü ve Ref Linki
   my_refs = user_refs.get(user_id, 0)
   bot_info = bot.get_me()
   ref_link = f"https://t.me/{bot_info.username}?start={user_id}"
@@ -102,7 +141,6 @@ def send_welcome(message):
   bot.reply_to(message, welcome_text, parse_mode="Markdown")
 
 
-# Admin Paneli Giriş Komutu: /admin efe01
 @bot.message_handler(commands=["admin"])
 def admin_login(message):
   user_id = message.from_user.id
@@ -122,7 +160,6 @@ def admin_login(message):
     )
 
 
-# Üyelik kontrol butonu
 @bot.callback_query_handler(func=lambda call: call.data == "check_sub")
 def callback_query(call):
   user_id = call.from_user.id
@@ -140,12 +177,10 @@ def callback_query(call):
     )
 
 
-# URL Tarama ve Mesaj Yönetimi
 @bot.message_handler(func=lambda message: True)
 def check_url(message):
   user_id = message.from_user.id
 
-  # Admin ise kanal kontrolünü es geç
   if user_id not in admin_sessions:
     if not check_all_channels(user_id):
       bot.reply_to(
@@ -156,7 +191,7 @@ def check_url(message):
       )
       return
 
-  url_to_scan = message.text
+  url_to_scan = message.text.strip()
 
   if not url_to_scan.startswith("http"):
     bot.reply_to(
@@ -190,16 +225,18 @@ def check_url(message):
         )
         bot.reply_to(message, reply_text)
       else:
-        bot.reply_to(message, "Sonuçlar alınamadı, daha sonra tekrar dene.")
+        bot.reply_to(message, "Sonuçlar analiz edilemedi, tekrar dene.")
     else:
       bot.reply_to(
-          message, "VirusTotal API bağlantısında bir hata oluştu."
+          message,
+          f"VirusTotal API Hatası: {response.status_code} - {response.text}",
       )
   except Exception as e:
     bot.reply_to(message, f"Bir hata oluştu: {str(e)}")
 
 
 if __name__ == "__main__":
-  print("Bot admin paneli ve gerçek ref sistemiyle çalışıyor...")
+  keep_alive()
+  print("Bot ve web sunucusu çalışıyor...")
   bot.infinity_polling()
   
