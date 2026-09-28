@@ -2,11 +2,11 @@ import os
 import requests
 import telebot
 
-# Bilgilerin (API anahtarın doğrudan içine eklendi)
+# Bilgilerin
 BOT_TOKEN = "8944877188:AAEYZxcVx4vFi6GdpNuGQyw9H65QoqSRrHA"
 VT_API_KEY = "Dd879532277e4c9e19490a5c4e348ab1f714d03792b4046e7b017aa9d36d38aa"
 
-# Zorunlu kanallar
+# Zorunlu Kanalların
 CHANNELS = ["swarovskiyeniden", "swarovskihile"]
 
 bot = telebot.TeleBot(BOT_TOKEN)
@@ -33,6 +33,7 @@ def send_welcome(message):
   user_id = message.from_user.id
   args = message.text.split()
 
+  # Referans sistemi kontrolü
   if len(args) > 1:
     ref_id = args[1]
     if ref_id.isdigit():
@@ -49,6 +50,7 @@ def send_welcome(message):
         except Exception:
           pass
 
+  # Admin ise her şeyi pas geçer
   if user_id in admin_sessions:
     bot.reply_to(
         message,
@@ -56,6 +58,7 @@ def send_welcome(message):
     )
     return
 
+  # 1. Kontrol: Kanallara katılmış mı?
   if not check_all_channels(user_id):
     markup = telebot.types.InlineKeyboardMarkup()
     markup.add(
@@ -81,15 +84,27 @@ def send_welcome(message):
     )
     return
 
+  # 2. Kontrol: En az 1 referans yapmış mı? (Referans Kilidi)
   my_refs = user_refs.get(user_id, 0)
   bot_info = bot.get_me()
   ref_link = f"https://t.me/{bot_info.username}?start={user_id}"
 
+  if my_refs < 1:
+    lock_text = (
+        f"🔒 **Botu kullanabilmek için 1 arkadaşını davet etmelisin!**\n\n"
+        f"👥 Mevcut Davetlerin: {my_refs} / 1\n\n"
+        f"🔗 **Senin Davet Linkin:**\n`{ref_link}`\n\n"
+        f"Bu linki arkadaşlarına gönder, bota start verdikleri an botun"
+        f" kilidi açılacaktır!"
+    )
+    bot.reply_to(message, lock_text, parse_mode="Markdown")
+    return
+
+  # Her şart tamamlandıysa ana menü
   welcome_text = (
       f"Selam! Ben VirusTotal Tarama Botuyum.\n"
       f"Bana bir **URL** gönder, taratıp sonucunu söyleyeyim.\n\n"
-      f"👥 **Referans Sistemi:**\n"
-      f"Davet ettiğin ve bota start veren kişi sayısı: {my_refs}\n"
+      f"👥 **Referans Durumu:** {my_refs} kişi davet ettin (Kilidi açtın! ✅)\n"
       f"🔗 Davet Linkin:\n`{ref_link}`"
   )
   bot.reply_to(message, welcome_text, parse_mode="Markdown")
@@ -104,8 +119,8 @@ def admin_login(message):
     admin_sessions.add(user_id)
     bot.reply_to(
         message,
-        "✅ **Admin girişi başarılı!** Artık kanallara veya reklamlara takılmadan"
-        " botu sınırsız kullanabilirsin.",
+        "✅ **Admin girişi başarılı!** Artık kanallara veya referansa"
+        " takılmadan botu sınırsız kullanabilirsin.",
     )
   else:
     bot.reply_to(
@@ -119,9 +134,11 @@ def callback_query(call):
   user_id = call.from_user.id
   if check_all_channels(user_id):
     bot.answer_callback_query(call.id, "Tebrikler, tüm kanallara katıldın!")
+    # Kanaldan sonra referans kontrolüne yönlendirelim
     bot.send_message(
         call.message.chat.id,
-        "Harika! Artık botu kullanabilirsin. Link gönderebilirsin.",
+        "Harika! Şimdi botu açmak için /start komutunu gönder ve referans"
+        " linkini al.",
     )
   else:
     bot.answer_callback_query(
@@ -136,12 +153,11 @@ def check_url(message):
   user_id = message.from_user.id
 
   if user_id not in admin_sessions:
-    if not check_all_channels(user_id):
+    if not check_all_channels(user_id) or user_refs.get(user_id, 0) < 1:
       bot.reply_to(
           message,
-          "⚠️ Botu kullanabilmek için önce şu iki kanala da katılmalısın:\n👉"
-          " @swarovskiyeniden\n👉 @swarovskihile\n\nSonrasında /start komutunu"
-          " gönder.",
+          "⚠️ Botu kullanabilmek için kanallara katılmış olmalı ve en az 1"
+          " arkadaşını davet etmelisin! /start yazarak durumunu görebilirsin.",
       )
       return
 
